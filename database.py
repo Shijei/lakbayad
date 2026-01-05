@@ -1,10 +1,10 @@
 """
 Lightweight Database operations using httpx (no supabase package needed)
+WITH SETTLEMENT CONFIRMATION SYSTEM + NOTIFICATIONS
 """
 import httpx
 from typing import Optional, List, Dict
 import config
-
 
 class Database:
     def __init__(self):
@@ -22,7 +22,6 @@ class Database:
         """Make HTTP request to Supabase"""
         url = f"{self.url}/rest/v1/{table}"
         
-        # Add Prefer header for POST/PATCH to return data
         headers = self.headers.copy()
         if method in ["POST", "PATCH"]:
             headers["Prefer"] = "return=representation"
@@ -30,10 +29,8 @@ class Database:
         response = self.client.request(method, url, params=params, json=json_data, headers=headers)
         response.raise_for_status()
         
-        # Parse response
         if response.text:
             result = response.json()
-            # Ensure result is always a list
             if not isinstance(result, list):
                 result = [result] if result else []
             return result
@@ -148,14 +145,14 @@ class Database:
         return type('Response', (), {'data': result})()
     
     def delete_expense(self, expense_id: str):
-        """Delete an expense permanently (cascade deletes participants)"""
+        """Delete an expense permanently"""
         result = self._request("DELETE", "expenses", params={"id": f"eq.{expense_id}"})
         return type('Response', (), {'data': result})()
     
-    # ==================== SETTLEMENT OPERATIONS ====================
+    # ==================== SETTLEMENT OPERATIONS (FIXED) ====================
     
     def create_settlement(self, trip_id: str, payer_id: str, receiver_id: str, amount_cents: int):
-        """Create settlement record"""
+        """Create settlement record and notify receiver"""
         data = {
             "trip_id": trip_id,
             "payer_id": payer_id,
@@ -164,6 +161,24 @@ class Database:
             "status": "pending"
         }
         result = self._request("POST", "settlements", json_data=data)
+        
+        # Create notification for receiver
+        try:
+            # Get payer name
+            payer = self._request("GET", "users", params={"id": f"eq.{payer_id}"})
+            payer_name = payer[0]['display_name'] if payer else 'Someone'
+            
+            message = f"💰 {payer_name} marked payment of ₱{amount_cents/100:.2f} as paid. Please confirm!"
+            notif_data = {
+                "user_id": receiver_id,
+                "message": message,
+                "is_read": False
+            }
+            self._request("POST", "notifications", json_data=notif_data)
+        except Exception as notif_err:
+            print(f"Notification creation failed: {notif_err}")
+            pass  # Notifications optional
+        
         return type('Response', (), {'data': result})()
     
     def update_settlement_proof(self, settlement_id: str, proof_image: str = None, notes: str = None):
@@ -176,15 +191,146 @@ class Database:
         result = self._request("PATCH", "settlements", params={"id": f"eq.{settlement_id}"}, json_data=data)
         return type('Response', (), {'data': result})()
     
-    def confirm_settlement(self, settlement_id: str, confirmed_by: str):
-        """Confirm settlement payment received"""
-        data = {
-            "confirmed_by": confirmed_by,
-            "confirmed_at": "now()",
-            "status": "completed"
+    def get_pending_settlements_for_receiver(self, receiver_id: str, trip_id: str = None):
+        """Get pending settlements where user is receiver"""
+        params = {
+            "receiver_id": f"eq.{receiver_id}",
+            "status": "eq.pending",
+            "select": "*,payer:payer_id(display_name),receiver:receiver_id(display_name),trips(name)"
         }
-        result = self._request("PATCH", "settlements", params={"id": f"eq.{settlement_id}"}, json_data=data)
+        
+        if trip_id:
+            params["trip_id"] = f"eq.{trip_id}"
+        
+        result = self._request("GET", "settlements", params=params)
         return type('Response', (), {'data': result})()
+    
+    def get_pending_settlements_for_payer(self, payer_id: str, trip_id: str = None):
+        """Get pending settlements where user is payer (NEW - for tracking)"""
+        params = {
+            "payer_id": f"eq.{payer_id}",
+            "status": "eq.pending"
+        }
+        
+        if trip_id:
+            params["trip_id"] = f"eq.{trip_id}"
+        
+        result = self._request("GET", "settlements", params=params)
+        return type('Response', (), {'data': result})()
+    
+    def get_payment_history(self, trip_id: str):
+        """Get confirmed settlements for a trip"""
+        result = self._request("GET", "settlements", params={
+            "trip_id": f"eq.{trip_id}",
+            "status": "eq.confirmed",
+            "select": "*,payer:payer_id(display_name),receiver:receiver_id(display_name)",
+            "order": "confirmed_at.desc",
+            "limit": "10"
+        })
+        return type('Response', (), {'data': result})()
+    
+    def confirm_settlement(self, settlement_id: str, confirmed_by: str):
+        """Confirm a settlement and notify payer"""
+        try:
+            # Get settlement details first
+            settlement = self._request("GET", "settlements", params={"id": f"eq.{settlement_id}"})
+            
+            if settlement and len(settlement) > 0:
+                payer_id = settlement[0]['payer_id']
+                amount_cents = settlement[0]['amount_cents']
+                
+                # Update status
+                data = {
+                    "status": "confirmed",
+                    "confirmed_by": confirmed_by,
+                    "confirmed_at": "now()"
+                }
+                result = self._request("PATCH", "settlements", params={"id": f"eq.{settlement_id}"}, json_data=data)
+                
+                # Create notification for payer
+                try:
+                    message = f"✓ Payment of ₱{amount_cents/100:.2f} was confirmed!"
+                    notif_data = {
+                        "user_id": payer_id,
+                        "message": message,
+                        "is_read": False
+                    }
+                    self._request("POST", "notifications", json_data=notif_data)
+                except Exception as notif_err:
+                    print(f"Notification creation failed: {notif_err}")
+                    pass  # Notifications optional
+                
+                return type('Response', (), {'data': result})()
+        except Exception as ex:
+            print(f"Confirm settlement error: {ex}")
+            # Fall back to simple update if fetch fails
+            data = {
+                "status": "confirmed",
+                "confirmed_by": confirmed_by,
+                "confirmed_at": "now()"
+            }
+            result = self._request("PATCH", "settlements", params={"id": f"eq.{settlement_id}"}, json_data=data)
+            return type('Response', (), {'data': result})()
+    
+    def reject_settlement(self, settlement_id: str, reason: str = None):
+        """Reject a settlement and create notification for payer"""
+        # Get settlement details first
+        try:
+            settlement = self._request("GET", "settlements", params={"id": f"eq.{settlement_id}"})
+            
+            if settlement and len(settlement) > 0:
+                payer_id = settlement[0]['payer_id']
+                amount_cents = settlement[0]['amount_cents']
+                
+                # Update status
+                data = {
+                    "status": "rejected",
+                    "rejected_reason": reason
+                }
+                result = self._request("PATCH", "settlements", params={"id": f"eq.{settlement_id}"}, json_data=data)
+                
+                # Create notification for payer
+                try:
+                    message = f"Payment of ₱{amount_cents/100:.2f} was rejected"
+                    if reason:
+                        message += f": {reason}"
+                    
+                    notif_data = {
+                        "user_id": payer_id,
+                        "message": message,
+                        "is_read": False
+                    }
+                    self._request("POST", "notifications", json_data=notif_data)
+                except Exception as notif_err:
+                    print(f"Notification creation failed: {notif_err}")
+                    pass  # Notifications optional
+                
+                return type('Response', (), {'data': result})()
+        except Exception as ex:
+            print(f"Reject settlement error: {ex}")
+            raise
+    
+    def get_notifications(self, user_id: str, unread_only: bool = False):
+        """Get notifications for user"""
+        params = {"user_id": f"eq.{user_id}", "order": "created_at.desc"}
+        if unread_only:
+            params["is_read"] = "eq.false"
+        
+        try:
+            result = self._request("GET", "notifications", params=params)
+            return type('Response', (), {'data': result})()
+        except:
+            return type('Response', (), {'data': []})()
+    
+    def mark_notification_read(self, notification_id: str):
+        """Mark notification as read"""
+        try:
+            result = self._request("PATCH", "notifications", 
+                                  params={"id": f"eq.{notification_id}"}, 
+                                  json_data={"is_read": True})
+            return type('Response', (), {'data': result})()
+        except:
+            return type('Response', (), {'data': []})()
     
     # ==================== VOTING OPERATIONS ====================
     
@@ -194,7 +340,7 @@ class Database:
             "trip_id": trip_id,
             "initiated_by": initiated_by,
             "status": "pending",
-            "votes": [initiated_by]  # Initiator automatically votes yes
+            "votes": [initiated_by]
         }
         result = self._request("POST", "delete_votes", json_data=data)
         return type('Response', (), {'data': result})()
@@ -214,7 +360,7 @@ class Database:
         return type('Response', (), {'data': result})()
     
     def approve_delete_vote(self, vote_id: str):
-        """Approve delete vote (all voted yes)"""
+        """Approve delete vote"""
         result = self._request("PATCH", "delete_votes", params={"id": f"eq.{vote_id}"}, json_data={"status": "approved"})
         return type('Response', (), {'data': result})()
     
@@ -223,7 +369,7 @@ class Database:
         result = self._request("PATCH", "delete_votes", params={"id": f"eq.{vote_id}"}, json_data={"status": "rejected"})
         return type('Response', (), {'data': result})()
     
-    # ==================== PARTICIPANT REMOVAL ====================
+    # ==================== PARTICIPANT MANAGEMENT ====================
     
     def remove_participant(self, trip_id: str, user_id: str):
         """Remove participant from trip"""
@@ -248,7 +394,6 @@ class Database:
             "user_id": f"eq.{user_id}"
         }, json_data={"display_name_override": None})
         return type('Response', (), {'data': result})()
-
 
 # Singleton instance
 db = Database()

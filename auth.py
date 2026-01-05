@@ -32,13 +32,14 @@ def create_auth_view(page: ft.Page, on_auth_success):
         page.update()
     
     def show_snackbar(message: str, error: bool = False):
-        """Show snackbar notification"""
-        page.snack_bar = ft.SnackBar(
+        """Show snackbar notification - FIXED for new Flet"""
+        snack_bar = ft.SnackBar(
             ft.Text(message, color=COLORS["surface"], size=14),
             bgcolor=COLORS["error"] if error else COLORS["success"],
             duration=3000
         )
-        page.snack_bar.open = True
+        page.overlay.append(snack_bar)
+        snack_bar.open = True
         page.update()
     
     # ==================== LOGIN ====================
