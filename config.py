@@ -1,19 +1,26 @@
 """
-Configuration and constants for LakBayad app
+Configuration module - App settings and environment variables
 """
+import os
+from dotenv import load_dotenv
 
-# Add your Supabase credentials here
-SUPABASE_URL = "https://upjrvfuszxkrqnaxexzu.supabase.co"
-SUPABASE_KEY = "sb_publishable_-PsowdFaMCFuOcJCTRUYSw_coe8Sac8"
+# Load .env file if it exists
+load_dotenv()
 
-# Global state variables
-CURRENT_USER_ID = None
-CURRENT_TRIP_ID = None
-CURRENT_TRIP_CREATOR = None  # Track who created current trip
-LOCAL_EXPENSES = []
-LOCAL_PARTICIPANTS = {}
-LAST_SELECTED_PARTICIPANTS = set()
-SHOW_OFFLINE_PREVIEW = False
+# Load environment variables (securely)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+
+# Validate required environment variables
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError(
+        "Missing required environment variables!\n"
+        "Please set SUPABASE_URL and SUPABASE_KEY as environment variables.\n"
+        "You can create a .env file or set them in your system/Render dashboard."
+    )
+
+# App Settings
+APP_PORT = int(os.getenv("APP_PORT", "8000"))
 
 # Khaki color palette
 COLORS = {
@@ -29,6 +36,12 @@ COLORS = {
     "error": "#E53935",       # Red
 }
 
-# App settings
-APP_TITLE = "LakBayad ₱"
-APP_PORT = 8000
+# Global State (runtime only, not stored)
+CURRENT_USER_ID = None
+CURRENT_TRIP_ID = None
+CURRENT_TRIP_CREATOR = None
+
+# Offline Mode
+LOCAL_EXPENSES = []
+SHOW_OFFLINE_PREVIEW = True
+LAST_SELECTED_PARTICIPANTS = set()

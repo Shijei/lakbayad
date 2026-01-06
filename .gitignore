@@ -22,9 +22,14 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Local config
+# Local config & secrets
 .env
+.env.*
 *.log
+
+# Session files (contains user login data)
+session.json
+*.session
 
 # Flet
 .flet/
