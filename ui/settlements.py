@@ -129,21 +129,19 @@ class SettlementsComponent:
                 
                 if is_payer and status != "confirmed":
                     if not is_pending:
-                        # Default: Show "Settle Payment" button
+                        # Default: Show payment icon button (no text to save space)
                         def make_handler(f_id, t_id, amt):
                             def handler(e):
                                 self._show_mark_paid_dialog(f_id, t_id, amt)
                             return handler
                         
-                        trailing = ft.ElevatedButton(
-                            "Settle Payment",
+                        trailing = ft.IconButton(
                             icon=ft.Icons.PAYMENT,
+                            icon_color=COLORS["surface"],
+                            bgcolor=COLORS["success"],
                             on_click=make_handler(from_id, to_id, amount),
-                            style=ft.ButtonStyle(
-                                bgcolor=COLORS["success"],
-                                color=COLORS["surface"],
-                            ),
-                            height=40,
+                            tooltip="Mark as Paid",  # Tooltip shows on hover
+                            icon_size=24,
                         )
                     else:
                         # Pending: Show hourglass icon
@@ -156,23 +154,34 @@ class SettlementsComponent:
                 if status == "confirmed":
                     # Paid & Settled - Show green badge
                     title_content = ft.Row([
-                        ft.Text(f"{from_name} → {to_name}", weight="bold", size=14),
+                        ft.Text(
+                            f"{from_name} → {to_name}", 
+                            weight="bold", 
+                            size=13,  # Smaller font
+                            overflow=ft.TextOverflow.ELLIPSIS,  # Truncate if too long
+                        ),
                         ft.Container(
                             content=ft.Row([
-                                ft.Icon(ft.Icons.CHECK_CIRCLE, color=COLORS["success"], size=14),
-                                ft.Text("Paid & Settled", size=11, color=COLORS["success"], weight="bold")
-                            ], tight=True, spacing=4),
+                                ft.Icon(ft.Icons.CHECK_CIRCLE, color=COLORS["success"], size=12),
+                                ft.Text("Paid", size=10, color=COLORS["success"], weight="bold")  # Shorter text
+                            ], tight=True, spacing=2),
                             bgcolor=ft.colors.GREEN_50,
-                            padding=6,
-                            border_radius=8,
-                            margin=ft.margin.only(left=8)
+                            padding=4,
+                            border_radius=6,
+                            margin=ft.margin.only(left=4)
                         )
                     ], tight=True)
                     subtitle_color = COLORS["text_secondary"]
                     bg_color = ft.colors.GREEN_50
                     icon_type = ft.Icons.CHECK_CIRCLE
                 else:
-                    title_content = ft.Text(f"{from_name} → {to_name}", weight="bold", size=14)
+                    title_content = ft.Text(
+                        f"{from_name} → {to_name}", 
+                        weight="bold", 
+                        size=13,  # Smaller font
+                        overflow=ft.TextOverflow.ELLIPSIS,  # Truncate if too long
+                        max_lines=1,
+                    )
                     subtitle_color = COLORS["success"]
                     bg_color = COLORS["secondary"] if is_involved else COLORS["surface"]
                     icon_type = ft.Icons.ARROW_FORWARD
@@ -182,7 +191,14 @@ class SettlementsComponent:
                         content=ft.ListTile(
                             leading=ft.Icon(icon_type, color=COLORS["success"], size=24),
                             title=title_content,
-                            subtitle=ft.Text(amount_str, size=18, color=subtitle_color, weight="w600"),
+                            subtitle=ft.Text(
+                                amount_str, 
+                                size=16,  # Reduced from 18
+                                color=subtitle_color, 
+                                weight="w600",
+                                overflow=ft.TextOverflow.ELLIPSIS,  # Prevent overflow
+                                max_lines=1,  # Keep on one line
+                            ),
                             trailing=trailing,
                         ),
                         bgcolor=bg_color,

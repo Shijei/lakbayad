@@ -57,27 +57,12 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                         show_trip_options(tid, tname)
                     return handler
                 
-                def make_copy_handler(code):
-                    def handler(e):
-                        page.set_clipboard(code)
-                        show_snackbar_func(f"✓ Copied code: {code}")
-                    return handler
-                
                 lv_trips.controls.append(
                     ft.Container(
                         content=ft.ListTile(
                             leading=ft.Icon(ft.Icons.TRIP_ORIGIN, size=32, color=COLORS["primary"]),
                             title=ft.Text(trip_data['name'], size=16, weight="bold"),
-                            subtitle=ft.Row([
-                                ft.Text(f"Code: {trip_data['invite_code']}", size=12),
-                                ft.IconButton(
-                                    icon=ft.Icons.COPY,
-                                    icon_size=16,
-                                    icon_color=COLORS["accent"],
-                                    tooltip="Copy invite code",
-                                    on_click=make_copy_handler(trip_data['invite_code'])
-                                ),
-                            ], spacing=4, tight=True),
+                            subtitle=ft.Text(f"Code: {trip_data['invite_code']}", size=12),
                             trailing=ft.Row([
                                 ft.IconButton(
                                     icon=ft.Icons.MORE_VERT,
@@ -129,15 +114,19 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
         is_creator = all_trips[trip_id].get('created_by') == config.CURRENT_USER_ID
         
         def archive_trip(e):
-            try:
-                db.archive_trip(trip_id)
-                all_trips[trip_id]['is_active'] = False
-                show_snackbar_func(f"✓ Archived {trip_name}")
-                options_dlg.open = False
+            # Show "Coming Soon" dialog instead
+            def close_soon(e2):
+                soon_dlg.open = False
                 page.update()
-                update_trip_list()
-            except Exception as ex:
-                show_error_func("Error", str(ex))
+            
+            soon_dlg = ft.AlertDialog(
+                title=ft.Text("Feature Coming Soon!", color=COLORS["accent"]),
+                content=ft.Text("Archive functionality will be available in a future update. For now, you can delete trips you no longer need."),
+                actions=[ft.TextButton("OK", on_click=close_soon)]
+            )
+            page.dialog = soon_dlg
+            soon_dlg.open = True
+            page.update()
         
         def delete_trip(e):
             def confirm_delete(e2):
@@ -170,37 +159,98 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
             confirm_dlg.open = True
             page.update()
         
+        def copy_code(e):
+            """Copy invite code to clipboard"""
+            page.set_clipboard(all_trips[trip_id]['invite_code'])
+            show_snackbar_func(f"✓ Copied: {all_trips[trip_id]['invite_code']}")
+            # Also show dialog for mobile
+            show_copy_dialog(all_trips[trip_id]['invite_code'])
+        
+        def show_copy_dialog(code):
+            """Show dialog with code for easy mobile copying"""
+            def close_dlg(e):
+                copy_dlg.open = False
+                page.update()
+            
+            copy_dlg = ft.AlertDialog(
+                title=ft.Text("Trip Invite Code", size=18, weight="bold"),
+                content=ft.Column([
+                    ft.Text("Share this code with your friends:", size=12),
+                    ft.Container(height=8),
+                    ft.Container(
+                        content=ft.Text(
+                            code,
+                            size=28,
+                            weight="bold",
+                            text_align=ft.TextAlign.CENTER,
+                            selectable=True,  # Make text selectable
+                        ),
+                        bgcolor=COLORS["secondary"],
+                        padding=20,
+                        border_radius=12,
+                        alignment=ft.alignment.center,
+                    ),
+                    ft.Container(height=8),
+                    ft.Text("Tap and hold to copy", size=11, italic=True, color=COLORS["text_secondary"]),
+                ], tight=True, spacing=4),
+                actions=[ft.TextButton("Close", on_click=close_dlg)]
+            )
+            page.dialog = copy_dlg
+            copy_dlg.open = True
+            page.update()
+        
         def close_options(e):
             options_dlg.open = False
             page.update()
         
+        # Build options menu
         options = []
+        
+        # Copy code button (for everyone) - Normal sized, no expand
+        options.append(
+            ft.Container(
+                content=ft.ElevatedButton(
+                    "📋 Copy Invite Code",
+                    on_click=copy_code,
+                    style=ft.ButtonStyle(bgcolor=COLORS["accent"], color=COLORS["surface"]),
+                    height=45,
+                ),
+                width=260,  # Fixed width
+            )
+        )
+        
         if is_creator:
-            options.extend([
-                ft.ElevatedButton(
-                    "🗄️ Archive Trip",
-                    on_click=archive_trip,
-                    style=ft.ButtonStyle(bgcolor=COLORS["warning"], color=COLORS["surface"]),
-                    expand=True
-                ),
-                ft.Container(height=8),
-                ft.ElevatedButton(
-                    "🗑️ Delete Trip",
-                    on_click=delete_trip,
-                    style=ft.ButtonStyle(bgcolor=COLORS["error"], color=COLORS["surface"]),
-                    expand=True
-                ),
-            ])
-        else:
-            options.append(ft.Text("Only trip creator can delete/archive trips", 
-                                  size=12, italic=True, color=COLORS["text_secondary"]))
+            options.append(ft.Container(height=12))
+            # Archive and Delete in horizontal row
+            options.append(
+                ft.Container(
+                    content=ft.Row([
+                        ft.ElevatedButton(
+                            "🗄️ Archive",
+                            on_click=archive_trip,
+                            style=ft.ButtonStyle(bgcolor=COLORS["warning"], color=COLORS["surface"]),
+                            expand=True,
+                            height=45,
+                        ),
+                        ft.Container(width=8),
+                        ft.ElevatedButton(
+                            "🗑️ Delete",
+                            on_click=delete_trip,
+                            style=ft.ButtonStyle(bgcolor=COLORS["error"], color=COLORS["surface"]),
+                            expand=True,
+                            height=45,
+                        ),
+                    ], spacing=0),
+                    width=260,  # Fixed width to match copy button
+                )
+            )
         
         options_dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text(f"Trip Options: {trip_name}", size=18, weight="bold"),
+            title=ft.Text(f"{trip_name}", size=18, weight="bold"),
             content=ft.Container(
-                content=ft.Column(options, spacing=8, tight=True),
-                width=300
+                content=ft.Column(options, spacing=0, tight=True),
+                width=280,  # Fixed width to prevent expansion
             ),
             actions=[ft.TextButton("Close", on_click=close_options)]
         )
@@ -217,10 +267,18 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
             border_radius=12
         )
         
+        btn_create = None  # Will store button reference
+        
         def create_trip(e):
             if not txt_name.value:
                 show_error_func("Missing Name", "Please enter a trip name")
                 return
+            
+            # Disable button to prevent double-click
+            if btn_create:
+                btn_create.disabled = True
+                btn_create.text = "Creating..."
+                page.update()
             
             try:
                 invite_code = generate_invite_code()
@@ -252,10 +310,21 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                     
             except Exception as ex:
                 show_error_func("Error", str(ex))
+                # Re-enable button on error
+                if btn_create:
+                    btn_create.disabled = False
+                    btn_create.text = "Create"
+                    page.update()
         
         def cancel(e):
             create_dlg.open = False
             page.update()
+        
+        btn_create = ft.ElevatedButton(
+            "Create",
+            on_click=create_trip,
+            style=ft.ButtonStyle(bgcolor=COLORS["primary"], color=COLORS["surface"])
+        )
         
         create_dlg = ft.AlertDialog(
             modal=True,
@@ -263,11 +332,7 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
             content=txt_name,
             actions=[
                 ft.TextButton("Cancel", on_click=cancel),
-                ft.ElevatedButton(
-                    "Create",
-                    on_click=create_trip,
-                    style=ft.ButtonStyle(bgcolor=COLORS["primary"], color=COLORS["surface"])
-                ),
+                btn_create,
             ]
         )
         

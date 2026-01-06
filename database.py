@@ -93,6 +93,35 @@ class Database:
         result = self._request("PATCH", "trips", params={"id": f"eq.{trip_id}"}, json_data={"is_active": False})
         return type('Response', (), {'data': result})()
     
+    def delete_trip(self, trip_id: str):
+        """Delete trip and all related data (CASCADE DELETE)"""
+        try:
+            # 1. Delete all settlements for this trip
+            self._request("DELETE", "settlements", params={"trip_id": f"eq.{trip_id}"})
+            
+            # 2. Delete all expense_participants for expenses in this trip
+            # First get all expense IDs
+            expenses = self._request("GET", "expenses", params={"trip_id": f"eq.{trip_id}", "select": "id"})
+            if expenses:
+                for exp in expenses:
+                    exp_id = exp.get('id')
+                    if exp_id:
+                        self._request("DELETE", "expense_participants", params={"expense_id": f"eq.{exp_id}"})
+            
+            # 3. Delete all expenses
+            self._request("DELETE", "expenses", params={"trip_id": f"eq.{trip_id}"})
+            
+            # 4. Delete all trip members (NOT the users themselves, just the association)
+            self._request("DELETE", "trip_members", params={"trip_id": f"eq.{trip_id}"})
+            
+            # 5. Finally, delete the trip itself
+            result = self._request("DELETE", "trips", params={"id": f"eq.{trip_id}"})
+            
+            return type('Response', (), {'data': result})()
+        except Exception as e:
+            print(f"Error deleting trip: {e}")
+            raise
+    
     def add_user_to_trip(self, trip_id: str, user_id: str):
         """Add user to trip"""
         data = {"trip_id": trip_id, "user_id": user_id}

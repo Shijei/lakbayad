@@ -48,28 +48,38 @@ def main(page: ft.Page):
     participants_component = ParticipantsComponent()
     settlements_component = SettlementsComponent()
     
-    # Session management
+    # Session management with version control
     SESSION_FILE = "session.json"
+    APP_VERSION = "2.0.0"  # Increment this to force logout all users
     
     def save_session():
-        """Save current session"""
+        """Save current session with app version"""
         import json
         try:
             with open(SESSION_FILE, "w") as f:
                 json.dump({
                     'user_id': config.CURRENT_USER_ID,
                     'display_name': current_user_data['display_name'],
-                    'email': current_user_data.get('email')
+                    'email': current_user_data.get('email'),
+                    'app_version': APP_VERSION  # Save version with session
                 }, f)
         except:
             pass
     
     def load_session():
-        """Load saved session"""
+        """Load saved session (auto-logout if version changed)"""
         import json
         try:
             with open(SESSION_FILE, "r") as f:
                 data = json.load(f)
+                
+                # Check app version - force logout if different
+                saved_version = data.get('app_version', '1.0.0')
+                if saved_version != APP_VERSION:
+                    print(f"Version changed: {saved_version} → {APP_VERSION}. Forcing logout.")
+                    clear_session()  # Clear old session
+                    return False
+                
                 config.CURRENT_USER_ID = data.get('user_id')
                 return True
         except:
