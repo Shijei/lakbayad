@@ -328,8 +328,24 @@ class SettlementsComponent:
             self.payment_history_section.visible = True
             
             for payment in payment_history[:10]:  # Show last 10
-                payer_name = payment.get('payer_name', 'Unknown')
-                receiver_name = payment.get('receiver_name', 'Unknown')
+                # Extract names from nested objects or fallback to IDs
+                payer_data = payment.get('payer')
+                receiver_data = payment.get('receiver')
+                
+                if payer_data and isinstance(payer_data, dict):
+                    payer_name = payer_data.get('display_name', 'Unknown')
+                else:
+                    # Fallback: try to get from all_participants using payer_id
+                    payer_id = payment.get('payer_id')
+                    payer_name = self.all_participants.get(payer_id, {}).get('display_name', 'Unknown')
+                
+                if receiver_data and isinstance(receiver_data, dict):
+                    receiver_name = receiver_data.get('display_name', 'Unknown')
+                else:
+                    # Fallback: try to get from all_participants using receiver_id
+                    receiver_id = payment.get('receiver_id')
+                    receiver_name = self.all_participants.get(receiver_id, {}).get('display_name', 'Unknown')
+                
                 amount_str = format_currency(payment['amount_cents'])
                 date = payment.get('confirmed_at', '')[:10] if payment.get('confirmed_at') else ''
                 
