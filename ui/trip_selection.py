@@ -57,12 +57,27 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                         show_trip_options(tid, tname)
                     return handler
                 
+                def make_copy_handler(code):
+                    def handler(e):
+                        page.set_clipboard(code)
+                        show_snackbar_func(f"✓ Copied code: {code}")
+                    return handler
+                
                 lv_trips.controls.append(
                     ft.Container(
                         content=ft.ListTile(
                             leading=ft.Icon(ft.Icons.TRIP_ORIGIN, size=32, color=COLORS["primary"]),
                             title=ft.Text(trip_data['name'], size=16, weight="bold"),
-                            subtitle=ft.Text(f"Code: {trip_data['invite_code']}", size=12),
+                            subtitle=ft.Row([
+                                ft.Text(f"Code: {trip_data['invite_code']}", size=12),
+                                ft.IconButton(
+                                    icon=ft.Icons.COPY,
+                                    icon_size=16,
+                                    icon_color=COLORS["accent"],
+                                    tooltip="Copy invite code",
+                                    on_click=make_copy_handler(trip_data['invite_code'])
+                                ),
+                            ], spacing=4, tight=True),
                             trailing=ft.Row([
                                 ft.IconButton(
                                     icon=ft.Icons.MORE_VERT,
@@ -268,7 +283,7 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
             autofocus=True,
             border_radius=12,
             max_length=6,
-            text_transform=ft.TextTransform.UPPERCASE
+            # Note: Will auto-uppercase in validation instead
         )
         
         def join_trip(e):
@@ -278,15 +293,19 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
             
             try:
                 code = txt_code.value.strip().upper()
+                print(f"Attempting to join trip with code: {code}")
                 
                 # Check if trip exists
                 response = db.get_trip_by_invite_code(code)
+                print(f"Trip lookup response: {response.data if response else 'None'}")
+                
                 if not response.data:
                     show_error_func("Invalid Code", "No trip found with this code")
                     return
                 
                 trip = response.data[0]
                 trip_id = trip['id']
+                print(f"Found trip: {trip['name']}")
                 
                 # Check if already member
                 try:
@@ -294,11 +313,13 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                     if membership.data and len(membership.data) > 0:
                         show_error_func("Already Joined", "You're already in this trip!")
                         return
-                except:
+                except Exception as check_ex:
                     # Method might not exist, skip check
+                    print(f"Membership check skipped: {check_ex}")
                     pass
                 
                 # Add user to trip
+                print(f"Adding user {config.CURRENT_USER_ID} to trip {trip_id}")
                 db.add_user_to_trip(trip_id, config.CURRENT_USER_ID)
                 
                 # Update local trips dict
@@ -315,36 +336,57 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                 update_trip_list()
                 
             except Exception as ex:
-                show_error_func("Error", str(ex))
+                print(f"Join trip error: {ex}")
+                import traceback
+                traceback.print_exc()
+                show_error_func("Error", f"Failed to join trip: {str(ex)}")
         
         def cancel(e):
             join_dlg.open = False
             page.update()
         
-        join_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Join Trip", size=20, weight="bold"),
-            content=ft.Column([
-                ft.Text("Enter the invite code shared by your trip organizer", size=12),
-                ft.Container(height=8),
-                txt_code,
-            ], tight=True, spacing=8),
-            actions=[
-                ft.TextButton("Cancel", on_click=cancel),
-                ft.ElevatedButton(
-                    "Join",
-                    on_click=join_trip,
-                    style=ft.ButtonStyle(bgcolor=COLORS["success"], color=COLORS["surface"])
-                ),
-            ]
-        )
-        
-        page.dialog = join_dlg
-        join_dlg.open = True
-        page.update()
+        try:
+            join_dlg = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Join Trip", size=20, weight="bold"),
+                content=ft.Column([
+                    ft.Text("Enter the invite code shared by your trip organizer", size=12),
+                    ft.Container(height=8),
+                    txt_code,
+                ], tight=True, spacing=8),
+                actions=[
+                    ft.TextButton("Cancel", on_click=cancel),
+                    ft.ElevatedButton(
+                        "Join",
+                        on_click=join_trip,
+                        style=ft.ButtonStyle(bgcolor=COLORS["success"], color=COLORS["surface"])
+                    ),
+                ]
+            )
+            
+            page.dialog = join_dlg
+            join_dlg.open = True
+            page.update()
+            print("Join trip dialog opened")
+        except Exception as dialog_ex:
+            print(f"Error opening join dialog: {dialog_ex}")
+            import traceback
+            traceback.print_exc()
+            show_error_func("Error", f"Failed to open dialog: {str(dialog_ex)}")
     
     # Initial load
     update_trip_list()
+    
+    # Define button handlers
+    def test_join_click(e):
+        print("=== JOIN TRIP BUTTON CLICKED ===")
+        try:
+            show_join_trip_dialog(e)
+        except Exception as ex:
+            print(f"ERROR in join trip: {ex}")
+            import traceback
+            traceback.print_exc()
+            show_error_func("Error", f"Failed to open join dialog: {str(ex)}")
     
     # Build UI
     return ft.Container(
@@ -378,7 +420,7 @@ def create_trip_selection_view(page: ft.Page, all_trips: dict, all_participants:
                     ft.Container(width=12),
                     ft.ElevatedButton(
                         "🔗 Join Trip",
-                        on_click=show_join_trip_dialog,
+                        on_click=test_join_click,  # Use wrapper to catch errors
                         expand=True,
                         height=50,
                         style=ft.ButtonStyle(bgcolor=COLORS["accent"], color=COLORS["surface"])
