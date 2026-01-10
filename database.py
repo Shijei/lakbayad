@@ -426,3 +426,16 @@ class Database:
 
 # Singleton instance
 db = Database()
+
+# Wrap with offline support
+try:
+    from offline_db import OfflineDB
+    from hybrid_db import HybridDatabase
+    
+    _offline_db = OfflineDB("lakbayad_cache.db")
+    db = HybridDatabase(db, _offline_db)
+    print("✓ Offline mode enabled")
+except ImportError as e:
+    print("⚠ Offline mode not available:", e)
+except Exception as e:
+    print("⚠ Offline mode failed to initialize:", e)
