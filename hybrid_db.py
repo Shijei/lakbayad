@@ -2,6 +2,7 @@
 Hybrid Database - Tries online first, falls back to offline cache
 """
 from offline_db import OfflineDB
+import httpx
 
 class HybridDatabase:
     """
@@ -93,10 +94,16 @@ class HybridDatabase:
                     self.offline.cache_participants(trip_id, participants)
                 
                 return response
-            except:
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
+                print(f"[OFFLINE] Network error detected: {type(e).__name__}")
                 self.is_online = False
+            except Exception as e:
+                print(f"[ERROR] Unexpected error: {e}")
+                self.is_online = False
+                # Fall through to offline mode
         
-        # Offline mode
+        # Offline mode - return cached data
+        print(f"[OFFLINE] Using cached participants for trip: {trip_id}")
         cached_participants = self.offline.get_cached_participants(trip_id)
         return type('Response', (), {'data': list(cached_participants.values())})()
     
@@ -114,10 +121,16 @@ class HybridDatabase:
                         self.offline.cache_expense(expense)
                 
                 return response
-            except:
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
+                print(f"[OFFLINE] Network error detected: {type(e).__name__}")
                 self.is_online = False
+            except Exception as e:
+                print(f"[ERROR] Unexpected error: {e}")
+                self.is_online = False
+                # Fall through to offline mode
         
-        # Offline mode
+        # Offline mode - return cached data
+        print(f"[OFFLINE] Using cached expenses for trip: {trip_id}")
         cached_expenses = self.offline.get_cached_expenses(trip_id)
         return type('Response', (), {'data': cached_expenses})()
     
@@ -142,10 +155,15 @@ class HybridDatabase:
                     self.offline.cache_expense(response.data[0])
                 
                 return response
-            except:
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
+                print(f"[OFFLINE] Network error detected: {type(e).__name__}")
+                self.is_online = False
+            except Exception as e:
+                print(f"[ERROR] Unexpected error: {e}")
                 self.is_online = False
         
         # Offline mode - add to local database and sync queue
+        print(f"[OFFLINE] Creating expense offline, will sync later")
         expense_id = self.offline.add_offline_expense(trip_id, expense_data)
         
         return type('Response', (), {'data': [{'id': expense_id, **expense_data}]})()

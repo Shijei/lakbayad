@@ -10,6 +10,7 @@ from .helpers import show_snackbar, show_error_dialog, create_card_style, format
 from .expenses import ExpensesComponent
 from .participants import ParticipantsComponent
 from .settlements import SettlementsComponent
+from .offline_indicator import create_offline_indicator
 
 __all__ = [
     'create_appbar',

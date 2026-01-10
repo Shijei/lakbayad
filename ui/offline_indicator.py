@@ -4,17 +4,23 @@ Offline Status Indicator - Shows connection status to user
 import flet as ft
 from ui.helpers import COLORS
 
-def create_offline_indicator(is_online, pending_sync=0):
+def create_offline_indicator(page, db):
     """
-    Create offline status indicator
+    Create offline status indicator that updates based on connection
     
     Args:
-        is_online: Boolean connection status
-        pending_sync: Number of pending changes to sync
-    
-    Returns:
-        Container with status indicator
+        page: Flet page instance
+        db: Database instance (HybridDatabase)
     """
+    # Get current connection status
+    try:
+        status = db.get_connection_status()
+        is_online = status['online']
+        pending_sync = status['pending_sync']
+    except:
+        is_online = True
+        pending_sync = 0
+        
     if is_online and pending_sync == 0:
         # Online, all synced - show nothing or subtle indicator
         return ft.Container(

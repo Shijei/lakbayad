@@ -182,6 +182,10 @@ def main(page: ft.Page):
         """Show main dashboard"""
         nonlocal refresh_dashboard
         
+        # Create offline indicator
+        from ui.offline_indicator import create_offline_indicator
+        offline_indicator = create_offline_indicator(page, db)
+        
         # Create dashboard layout
         dashboard_container, refresh_function = create_dashboard_layout(
             page,
@@ -193,13 +197,19 @@ def main(page: ft.Page):
             settlements_component
         )
         
+        # Add offline indicator to top of dashboard
+        dashboard_with_indicator = ft.Column([
+            offline_indicator,
+            dashboard_container
+        ], spacing=0)
+        
         # Store refresh function
         refresh_dashboard = refresh_function
         
-        # Set page reference for components (now refresh_dashboard is set)
+        # Set page reference for components
         settlements_component.set_page_and_callback(page, refresh_dashboard)
         
-        main_container.content = dashboard_container
+        main_container.content = dashboard_with_indicator  # Use wrapped version
         page.update()
         
         # Initial data load

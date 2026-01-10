@@ -15,7 +15,7 @@ class Database:
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
         }
-        self.client = httpx.Client(headers=self.headers, timeout=30.0)
+        self.client = httpx.Client(headers=self.headers, timeout=5.0)
         print("✓ Database connected")
     
     def _request(self, method: str, table: str, params: dict = None, json_data: dict = None):
