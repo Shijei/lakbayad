@@ -120,9 +120,94 @@ class SettlementsComponent:
                 settlement_key = f"{from_id}_{to_id}_{amount}"
                 is_pending = settlement_key in pending_tracker
                 
-                # Check if confirmed
+                # Check if confirmed AND validate amount matches
                 status_key = f"{from_id}_{to_id}"
-                status = status_dict.get(status_key, None)
+                status_record = status_dict.get(status_key, None)
+                status = None
+                
+                # DEBUG: Log what we're checking
+                # print(f"[DEBUG] Checking settlement: {from_name} → {to_name}")
+                # print(f"[DEBUG] Current amount: ₱{amount/100:.2f} ({amount} cents)")
+                # print(f"[DEBUG] Status key: {status_key}")
+                # print(f"[DEBUG] Status record: {status_record}")
+                
+                # Handle both old format (string) and new format (dict)
+                if status_record:
+                    if isinstance(status_record, dict):
+                        # New format: {'status': 'pending', 'amount_cents': 50000, 'id': '...'}
+                        stored_amount = status_record.get('amount_cents', 0)
+                        stored_status = status_record.get('status')
+                        current_amount = amount
+                        
+                        if stored_amount == current_amount:
+                            # Amount matches - use stored status
+                            status = stored_status
+                        else:
+                            # Amount changed!
+                            settlement_id = status_record.get('id')
+                            
+                            if stored_status == 'confirmed':
+                                # VOID the confirmed payment (keep in history)
+                                print(f"[SETTLEMENT] Amount changed: ₱{stored_amount/100:.2f} → ₱{current_amount/100:.2f}")
+                                print(f"[SETTLEMENT] Voiding confirmed settlement: {settlement_id}")
+                                
+                                try:
+                                    from database import db
+                                    # Update status to 'voided' instead of deleting
+                                    db._request("PATCH", "settlements", params={
+                                        "id": f"eq.{settlement_id}"
+                                    }, json_data={
+                                        "status": "voided",
+                                        "void_reason": "Balance changed - New expenses added"
+                                    })
+                                    print(f"[SETTLEMENT] Successfully voided settlement")
+                                    
+                                    # Send notifications
+                                    # To payer
+                                    try:
+                                        db.create_notification(
+                                            user_id=from_id,
+                                            trip_id=config.CURRENT_TRIP_ID,
+                                            message=f"Your ₱{stored_amount/100:.2f} payment was voided. Balance changed to ₱{current_amount/100:.2f}. Please re-send payment confirmation.",
+                                            notification_type="settlement_voided"
+                                        )
+                                    except:
+                                        pass
+                                    
+                                    # To receiver
+                                    try:
+                                        from_name = all_participants.get(from_id, {}).get('display_name', 'Someone')
+                                        db.create_notification(
+                                            user_id=to_id,
+                                            trip_id=config.CURRENT_TRIP_ID,
+                                            message=f"{from_name}'s ₱{stored_amount/100:.2f} payment was voided due to balance change. Payer will resend new confirmation.",
+                                            notification_type="settlement_voided"
+                                        )
+                                    except:
+                                        pass
+                                        
+                                except Exception as void_ex:
+                                    print(f"[SETTLEMENT] Failed to void: {void_ex}")
+                            
+                            elif stored_status == 'pending' or stored_status == 'rejected':
+                                # Auto-cancel pending/rejected (delete entirely)
+                                print(f"[SETTLEMENT] Amount changed: ₱{stored_amount/100:.2f} → ₱{current_amount/100:.2f}")
+                                print(f"[SETTLEMENT] Auto-cancelling {stored_status.upper()} settlement: {settlement_id}")
+                                
+                                try:
+                                    from database import db
+                                    db._request("DELETE", f"settlements?id=eq.{settlement_id}")
+                                    print(f"[SETTLEMENT] Successfully cancelled settlement")
+                                except Exception as cancel_ex:
+                                    print(f"[SETTLEMENT] Failed to cancel: {cancel_ex}")
+                            
+                            # Either way, treat current settlement as new (no status)
+                            status = None
+                    else:
+                        # Old format: status_record is just a string like 'confirmed'
+                        # Can't validate amount, so just use the status
+                        status = status_record
+                        print(f"[SETTLEMENT] Warning: Using old status format (string), can't validate amount")
                 
                 # Create appropriate button/icon based on status
                 trailing = None
@@ -347,16 +432,47 @@ class SettlementsComponent:
                     receiver_name = self.all_participants.get(receiver_id, {}).get('display_name', 'Unknown')
                 
                 amount_str = format_currency(payment['amount_cents'])
+                status = payment.get('status', 'confirmed')
                 date = payment.get('confirmed_at', '')[:10] if payment.get('confirmed_at') else ''
+                
+                # Check if voided
+                is_voided = status == 'voided'
+                void_reason = payment.get('void_reason', 'Balance changed')
+                
+                if is_voided:
+                    # Voided payment - strikethrough with warning icon
+                    leading_icon = ft.Icon(ft.Icons.WARNING, color=COLORS["warning"], size=20)
+                    title_text = ft.Text(
+                        f"{payer_name} → {receiver_name}",
+                        size=13,
+                        color=COLORS["text_secondary"],
+                        style=ft.TextStyle(decoration=ft.TextDecoration.LINE_THROUGH)  # Strikethrough
+                    )
+                    subtitle_text = ft.Text(
+                        f"{amount_str} • {date}\nVOIDED: {void_reason}",
+                        size=11,
+                        color=COLORS["warning"]
+                    )
+                    bg_color = ft.colors.ORANGE_50
+                else:
+                    # Confirmed payment - normal display
+                    leading_icon = ft.Icon(ft.Icons.CHECK_CIRCLE, color=COLORS["success"], size=20)
+                    title_text = ft.Text(f"{payer_name} → {receiver_name}", size=13)
+                    subtitle_text = ft.Text(
+                        f"{amount_str} • {date}\nConfirmed",
+                        size=11,
+                        color=COLORS["text_secondary"]
+                    )
+                    bg_color = COLORS["surface"]
                 
                 self.lv_history.controls.append(
                     ft.Container(
                         content=ft.ListTile(
-                            leading=ft.Icon(ft.Icons.CHECK_CIRCLE, color=COLORS["success"], size=20),
-                            title=ft.Text(f"{payer_name} → {receiver_name}", size=13),
-                            subtitle=ft.Text(f"{amount_str} • {date}", size=11, color=COLORS["text_secondary"]),
+                            leading=leading_icon,
+                            title=title_text,
+                            subtitle=subtitle_text,
                         ),
-                        bgcolor=COLORS["surface"],
+                        bgcolor=bg_color,
                         border_radius=12,
                         padding=4,
                         margin=ft.margin.only(bottom=4),

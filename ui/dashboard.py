@@ -89,7 +89,12 @@ def create_dashboard_layout(page: ft.Page, all_participants: dict, all_trips: di
                 settlements_status.clear()
                 for settlement_record in all_settlements_response:
                     key = f"{settlement_record['payer_id']}_{settlement_record['receiver_id']}"
-                    settlements_status[key] = settlement_record['status']
+                    # Store both status AND amount to validate later
+                    settlements_status[key] = {
+                        'status': settlement_record['status'],
+                        'amount_cents': settlement_record['amount_cents'],
+                        'id': settlement_record['id']
+                    }
             except Exception as status_ex:
                 print(f"Settlement status fetch error: {status_ex}")
             

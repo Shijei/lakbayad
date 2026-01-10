@@ -23,7 +23,7 @@ def main(page: ft.Page):
     """Main application entry point"""
     
     # Page configuration
-    page.title = "LakBayad - Expense Splitter"
+    page.title = "LakBayad - Travel Expense Tracker"
     page.scroll = "adaptive"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = COLORS["bg"]

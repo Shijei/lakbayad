@@ -248,13 +248,13 @@ class Database:
         return type('Response', (), {'data': result})()
     
     def get_payment_history(self, trip_id: str):
-        """Get confirmed settlements for a trip"""
+        """Get confirmed and voided settlements for a trip"""
         result = self._request("GET", "settlements", params={
             "trip_id": f"eq.{trip_id}",
-            "status": "eq.confirmed",
+            "status": "in.(confirmed,voided)",  # Include both confirmed AND voided
             "select": "*,payer:payer_id(display_name),receiver:receiver_id(display_name)",
-            "order": "confirmed_at.desc",
-            "limit": "10"
+            "order": "confirmed_at.desc.nullslast,created_at.desc",  # Show confirmed first, then voided
+            "limit": "15"  # Show more to include voided ones
         })
         return type('Response', (), {'data': result})()
     
