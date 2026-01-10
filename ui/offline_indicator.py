@@ -6,31 +6,31 @@ from ui.helpers import COLORS
 
 def create_offline_indicator(page, db):
     """
-    Create offline status indicator that updates based on connection
+    Create offline status indicator that checks connection dynamically
     
     Args:
         page: Flet page instance
         db: Database instance (HybridDatabase)
+    
+    Returns:
+        Container with status indicator
     """
     # Get current connection status
     try:
-        status = db.get_connection_status()
-        is_online = status['online']
-        pending_sync = status['pending_sync']
+        if hasattr(db, 'get_connection_status'):
+            status = db.get_connection_status()
+            is_online = status.get('online', True)
+            pending_sync = status.get('pending_sync', 0)
+        else:
+            is_online = True
+            pending_sync = 0
     except:
         is_online = True
         pending_sync = 0
-        
+    
     if is_online and pending_sync == 0:
-        # Online, all synced - show nothing or subtle indicator
-        return ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.CLOUD_DONE, color=ft.colors.GREEN, size=16),
-                ft.Text("Online", size=12, color=ft.colors.GREEN)
-            ], tight=True, spacing=4),
-            padding=8,
-            visible=False  # Hide when everything is good
-        )
+        # Online, all synced - hide indicator
+        return ft.Container(visible=False)
     
     elif is_online and pending_sync > 0:
         # Online but has pending changes
@@ -59,46 +59,3 @@ def create_offline_indicator(page, db):
             bgcolor=ft.colors.RED_50,
             border_radius=8,
         )
-
-
-class OfflineStatusBar:
-    """Persistent offline status bar for appbar"""
-    
-    def __init__(self):
-        self.container = ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.CLOUD_DONE, color=ft.colors.GREEN, size=20),
-            ], tight=True),
-            padding=4,
-            visible=False
-        )
-    
-    def update_status(self, is_online, pending_sync=0):
-        """Update status indicator"""
-        if is_online and pending_sync == 0:
-            # Online, all good
-            self.container.content = ft.Row([
-                ft.Icon(ft.Icons.CLOUD_DONE, color=ft.colors.GREEN, size=20),
-            ], tight=True)
-            self.container.bgcolor = None
-            self.container.visible = False
-            
-        elif is_online and pending_sync > 0:
-            # Syncing
-            self.container.content = ft.Row([
-                ft.ProgressRing(width=16, height=16, stroke_width=2, color=COLORS["warning"]),
-                ft.Text(f"{pending_sync}", size=12, color=COLORS["warning"])
-            ], tight=True, spacing=4)
-            self.container.bgcolor = None
-            self.container.visible = True
-            
-        else:
-            # Offline
-            self.container.content = ft.Row([
-                ft.Icon(ft.Icons.CLOUD_OFF, color=COLORS["error"], size=20),
-                ft.Text(f"{pending_sync}" if pending_sync > 0 else "", size=12)
-            ], tight=True, spacing=4)
-            self.container.bgcolor = ft.colors.RED_50
-            self.container.visible = True
-        
-        return self.container

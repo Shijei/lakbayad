@@ -2,7 +2,6 @@
 Hybrid Database - Tries online first, falls back to offline cache
 """
 from offline_db import OfflineDB
-import httpx
 
 class HybridDatabase:
     """
@@ -57,7 +56,7 @@ class HybridDatabase:
                 print(f"[DEBUG] Online request FAILED: {type(e).__name__}: {e}")
                 import traceback
                 traceback.print_exc()
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
                 print(f"[DEBUG] Marked as offline, falling through to cache...")
         
         # Offline mode
@@ -96,10 +95,10 @@ class HybridDatabase:
                 return response
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
                 print(f"[OFFLINE] Network error detected: {type(e).__name__}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
             except Exception as e:
                 print(f"[ERROR] Unexpected error: {e}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
                 # Fall through to offline mode
         
         # Offline mode - return cached data
@@ -123,10 +122,10 @@ class HybridDatabase:
                 return response
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
                 print(f"[OFFLINE] Network error detected: {type(e).__name__}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
             except Exception as e:
                 print(f"[ERROR] Unexpected error: {e}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
                 # Fall through to offline mode
         
         # Offline mode - return cached data
@@ -157,10 +156,10 @@ class HybridDatabase:
                 return response
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as e:
                 print(f"[OFFLINE] Network error detected: {type(e).__name__}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
             except Exception as e:
                 print(f"[ERROR] Unexpected error: {e}")
-                self.is_online = False
+                self.is_online = False  # Will retry on next request
         
         # Offline mode - add to local database and sync queue
         print(f"[OFFLINE] Creating expense offline, will sync later")
