@@ -215,13 +215,54 @@ def main(page: ft.Page):
     # Check for existing session
     if load_session() and config.CURRENT_USER_ID:
         try:
+            # Try to get user from database (online)
             user_result = db.get_user_by_id(config.CURRENT_USER_ID)
             if user_result.data:
                 # Clear trip selection on auto-login
                 config.CURRENT_TRIP_ID = None
                 on_auth_success(user_result.data[0])
-        except:
-            pass
+        except Exception as e:
+            # If offline or error, use cached session data
+            print(f"[DEBUG] Online user fetch failed: {e}")
+            print(f"[DEBUG] Using cached session for offline mode")
+            
+            # Load user data from session file
+            import json
+            try:
+                with open(SESSION_FILE, "r") as f:
+                    session_data = json.load(f)
+                    
+                # Create user object from session
+                user = {
+                    'id': session_data.get('user_id'),
+                    'display_name': session_data.get('display_name'),
+                    'email': session_data.get('email')
+                }
+                
+                # Set current user
+                current_user_data['id'] = user['id']
+                current_user_data['display_name'] = user['display_name']
+                current_user_data['email'] = user.get('email')
+                config.CURRENT_USER_ID = user['id']
+                
+                # Clear trip selection
+                config.CURRENT_TRIP_ID = None
+                
+                # Load cached trips (offline mode)
+                load_trips()
+                
+                # Show trip selection
+                show_trip_selection()
+                
+                update_appbar()
+                welcome_container.visible = False
+                main_container.visible = True
+                page.update()
+                
+                print(f"[DEBUG] Offline mode: Loaded session for {user['display_name']}")
+            except Exception as session_err:
+                print(f"[DEBUG] Failed to load session: {session_err}")
+                pass
     
     # Add to page
     page.add(welcome_container, main_container)
