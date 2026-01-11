@@ -28,21 +28,7 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = COLORS["bg"]
     page.padding = 0
-    page.add(ft.Container(
-        content=ft.Html("""
-            <script>
-            if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('[SW] Registered:', reg.scope))
-                .catch(err => console.error('[SW] Registration failed:', err));
-            });
-            }
-            </script>
-            <script src="/assets/offline-manager.js"></script>
-        """),
-        visible=False
-    ))
+    
     # Global state
     current_user_data = {
         'id': None,
